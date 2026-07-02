@@ -35,6 +35,7 @@ def _capture_argv(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
         return _Result()
 
     monkeypatch.setattr(download.subprocess, "run", fake_run)
+    monkeypatch.setattr(download.shutil, "which", lambda name: name if name == "yt-dlp" else None)
     return calls
 
 
@@ -62,3 +63,29 @@ def test_download_url_requests_english_only(monkeypatch, tmp_path):
     with pytest.raises(SystemExit):
         download.download_url(URL, tmp_path / "download")
     _assert_english_only(_sub_langs(calls[0]))
+
+
+def test_resolve_local_uses_exact_sidecar_before_language_variant(tmp_path):
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"not really a video")
+    exact = tmp_path / "clip.srt"
+    exact.write_text("exact", encoding="utf-8")
+    language_variant = tmp_path / "clip.en.vtt"
+    language_variant.write_text("english", encoding="utf-8")
+
+    result = download.resolve_local(str(video))
+
+    assert result["subtitle_path"] == str(exact.resolve())
+    assert result["subtitle_source"] == "sidecar subtitles"
+
+
+def test_resolve_local_uses_language_sidecar_when_exact_missing(tmp_path):
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"not really a video")
+    sidecar = tmp_path / "clip.en.SRT"
+    sidecar.write_text("english", encoding="utf-8")
+
+    result = download.resolve_local(str(video))
+
+    assert result["subtitle_path"] == str(sidecar.resolve())
+    assert result["subtitle_source"] == "sidecar subtitles"

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -45,6 +46,25 @@ def test_transcript_skips_frames(cut_clip: Path):
     assert "frame_0000.jpg" not in out
 
 
+def test_local_sidecar_subtitles_satisfy_transcript_detail(cut_clip: Path, tmp_path: Path):
+    clip = tmp_path / "clip.mp4"
+    shutil.copy2(cut_clip, clip)
+    (tmp_path / "clip.srt").write_text(
+        "1\n"
+        "00:00:01,000 --> 00:00:02,000\n"
+        "hello from the sidecar\n\n",
+        encoding="utf-8",
+    )
+
+    out = _run(clip, "--detail", "transcript")
+
+    assert "skipped" in out
+    assert "frame_0000.jpg" not in out
+    assert "**Transcript:** 1 segments (via sidecar subtitles)" in out
+    assert "_Source: sidecar subtitles._" in out
+    assert "hello from the sidecar" in out
+
+
 def test_flag_overrides_env(cut_clip: Path):
     out = _run(cut_clip, "--detail", "efficient", env_extra={"WATCH_DETAIL": "balanced"})
     assert "(keyframe" in out
@@ -70,7 +90,10 @@ def test_timestamps_with_transcript_detail_is_cue_only(cut_clip: Path):
 
 
 def _frame_lines(out: str) -> int:
-    return sum(1 for line in out.splitlines() if "/frames/frame_" in line and "(t=" in line)
+    return sum(
+        1 for line in out.splitlines()
+        if "/frames/frame_" in line.replace("\\", "/") and "(t=" in line
+    )
 
 
 def test_dedup_collapses_static_by_default(static_clip: Path):

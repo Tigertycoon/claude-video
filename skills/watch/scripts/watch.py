@@ -18,7 +18,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 from config import frame_cap, get_config  # noqa: E402
 from download import download, fetch_captions, is_url  # noqa: E402
 from frames import MAX_FPS, auto_fps, auto_fps_focus, extract_at_timestamps, extract_keyframes, extract_scene_or_uniform, format_time, get_metadata, merge_frames, parse_time, parse_timestamps  # noqa: E402
-from transcribe import filter_range, format_transcript, parse_vtt  # noqa: E402
+from transcribe import filter_range, format_transcript, parse_subtitle  # noqa: E402
 from whisper import load_api_key, transcribe_video  # noqa: E402
 
 
@@ -99,9 +99,9 @@ def main() -> int:
         dl = fetch_captions(args.source, work / "download")
         if dl.get("subtitle_path"):
             try:
-                transcript_segments = parse_vtt(dl["subtitle_path"])
+                transcript_segments = parse_subtitle(dl["subtitle_path"])
                 transcript_text = format_transcript(transcript_segments)
-                transcript_source = "captions"
+                transcript_source = dl.get("subtitle_source") or "captions"
             except Exception as exc:
                 print(f"[watch] subtitle parse failed: {exc}", file=sys.stderr)
                 transcript_segments = []
@@ -229,10 +229,10 @@ def main() -> int:
 
     if not transcript_segments and dl.get("subtitle_path"):
         try:
-            all_segments = parse_vtt(dl["subtitle_path"])
+            all_segments = parse_subtitle(dl["subtitle_path"])
             transcript_segments = filter_range(all_segments, start_sec, end_sec) if focused else all_segments
             transcript_text = format_transcript(transcript_segments)
-            transcript_source = "captions"
+            transcript_source = dl.get("subtitle_source") or "captions"
         except Exception as exc:
             print(f"[watch] subtitle parse failed: {exc}", file=sys.stderr)
 

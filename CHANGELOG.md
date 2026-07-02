@@ -2,6 +2,11 @@
 
 All notable changes to `/watch` are documented here.
 
+## [Unreleased]
+
+### Added
+- Local video files now use same-directory `.vtt` / `.srt` sidecar subtitles before falling back to Whisper, including language variants like `video.en.srt`.
+
 ## [0.2.0] — 2026-06-29
 
 ### Added

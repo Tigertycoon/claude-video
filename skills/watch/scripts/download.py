@@ -15,6 +15,9 @@ from urllib.parse import urlparse
 
 
 VIDEO_EXTS = {".mp4", ".mkv", ".webm", ".mov", ".m4v", ".avi", ".flv", ".wmv"}
+SUBTITLE_EXTS = {".vtt", ".srt"}
+SUBTITLE_EXT_PRIORITY = {".vtt": 0, ".srt": 1}
+ENGLISH_SUBTITLE_MARKERS = {"en", "eng", "en-us", "en-gb", "en-orig"}
 
 
 def is_url(source: str) -> bool:
@@ -33,12 +36,57 @@ def resolve_local(path: str) -> dict:
             f"[watch] warning: {p.suffix} is not a known video extension, proceeding anyway",
             file=sys.stderr,
         )
+    subtitle = find_sidecar_subtitle(p)
+    if subtitle:
+        print(f"[watch] found local subtitle sidecar: {subtitle}", file=sys.stderr)
     return {
         "video_path": str(p),
-        "subtitle_path": None,
+        "subtitle_path": str(subtitle) if subtitle else None,
+        "subtitle_source": "sidecar subtitles" if subtitle else None,
         "info": {"title": p.name, "url": str(p)},
         "downloaded": False,
     }
+
+
+def _sidecar_priority(candidate: Path, video: Path) -> tuple[int, int, str]:
+    """Prefer exact-stem subtitles, then English language variants."""
+    video_stem = video.stem.lower()
+    candidate_stem = candidate.stem.lower()
+    ext_rank = SUBTITLE_EXT_PRIORITY.get(candidate.suffix.lower(), 99)
+
+    if candidate_stem == video_stem:
+        return (0, ext_rank, candidate.name.lower())
+
+    marker = candidate_stem[len(video_stem) + 1:]
+    if marker in ENGLISH_SUBTITLE_MARKERS or marker.startswith("en-"):
+        return (1, ext_rank, candidate.name.lower())
+
+    return (2, ext_rank, candidate.name.lower())
+
+
+def find_sidecar_subtitle(video_path: Path) -> Path | None:
+    """Return the best same-directory .vtt/.srt sidecar for a local video."""
+    video_stem = video_path.stem.lower()
+    candidates: list[Path] = []
+
+    try:
+        entries = list(video_path.parent.iterdir())
+    except OSError as exc:
+        print(f"[watch] subtitle sidecar scan failed: {exc}", file=sys.stderr)
+        return None
+
+    for entry in entries:
+        if not entry.is_file():
+            continue
+        if entry.suffix.lower() not in SUBTITLE_EXTS:
+            continue
+        entry_stem = entry.stem.lower()
+        if entry_stem == video_stem or entry_stem.startswith(video_stem + "."):
+            candidates.append(entry)
+
+    if not candidates:
+        return None
+    return sorted(candidates, key=lambda candidate: _sidecar_priority(candidate, video_path))[0]
 
 
 def _pick_subtitle(out_dir: Path) -> Path | None:
@@ -90,6 +138,7 @@ def fetch_captions(url: str, out_dir: Path) -> dict:
     return {
         "video_path": None,
         "subtitle_path": str(subtitle) if subtitle else None,
+        "subtitle_source": "captions" if subtitle else None,
         "info": info or {"url": url},
         "downloaded": False,
     }
@@ -157,6 +206,7 @@ def download_url(
     return {
         "video_path": str(video),
         "subtitle_path": str(subtitle) if subtitle else None,
+        "subtitle_source": "captions" if subtitle else None,
         "info": info or {"url": url},
         "downloaded": True,
     }

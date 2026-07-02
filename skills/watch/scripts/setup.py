@@ -38,7 +38,7 @@ CONFIG_FILE = CONFIG_DIR / ".env"
 ENV_TEMPLATE = """# /watch API configuration
 #
 # Whisper transcription fallback — used only when yt-dlp cannot get captions
-# (or when you point /watch at a local file with no subtitles).
+# (or when you point /watch at a local file with no sidecar subtitles).
 #
 # Groq is preferred: it runs whisper-large-v3 at a fraction of OpenAI's price
 # and is faster in practice. OpenAI is the compatible fallback.
@@ -73,6 +73,8 @@ _PERM_WARNED: set[str] = set()
 def _check_file_permissions(path: Path) -> None:
     """Warn to stderr (once per path per process) if a secrets file is
     world/group readable."""
+    if os.name == "nt":
+        return
     key = str(path)
     if key in _PERM_WARNED:
         return

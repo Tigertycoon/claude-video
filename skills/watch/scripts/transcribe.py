@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parse a WebVTT subtitle file into a clean, timestamped transcript.
+"""Parse WebVTT/SubRip subtitles into a clean, timestamped transcript.
 
 YouTube auto-subs emit rolling-duplicate cues (each line appears 2-3 times as it
 scrolls). We dedupe consecutive identical cues and merge their time ranges.
@@ -12,23 +12,24 @@ from pathlib import Path
 
 
 TS_RE = re.compile(
-    r"(\d{2}):(\d{2}):(\d{2})[.,](\d{3})\s+-->\s+(\d{2}):(\d{2}):(\d{2})[.,](\d{3})"
+    r"(?:(\d+):)?(\d{2}):(\d{2})[.,](\d{3})\s+-->\s+"
+    r"(?:(\d+):)?(\d{2}):(\d{2})[.,](\d{3})"
 )
 TAG_RE = re.compile(r"<[^>]+>")
 
 
-def _to_seconds(h: str, m: str, s: str, ms: str) -> float:
-    return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000.0
+def _to_seconds(h: str | None, m: str, s: str, ms: str) -> float:
+    return int(h or 0) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000.0
 
 
-def parse_vtt(path: str) -> list[dict]:
+def parse_subtitle(path: str) -> list[dict]:
     text = Path(path).read_text(encoding="utf-8", errors="ignore")
     lines = text.splitlines()
 
     segments: list[dict] = []
     i = 0
     while i < len(lines):
-        match = TS_RE.match(lines[i])
+        match = TS_RE.match(lines[i].strip())
         if not match:
             i += 1
             continue
@@ -50,6 +51,11 @@ def parse_vtt(path: str) -> list[dict]:
         i += 1
 
     return _dedupe(segments)
+
+
+def parse_vtt(path: str) -> list[dict]:
+    """Backward-compatible alias for older callers."""
+    return parse_subtitle(path)
 
 
 def _dedupe(segments: list[dict]) -> list[dict]:
